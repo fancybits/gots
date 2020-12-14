@@ -25,6 +25,7 @@ SOFTWARE.
 package psi
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strconv"
 )
@@ -42,10 +43,20 @@ const (
 	MAXIMUM_BITRATE    uint8 = 14  // 0000 1110 (0x0E)
 	AVC_VIDEO          uint8 = 40  // 0010 1000 (0x28)
 	STREAM_IDENTIFIER  uint8 = 82  // 0101 0010 (0x52)
+	TTML_SUBTITLING    uint8 = 127 // 0111 1111 (0x7F)
 	SCTE_ADAPTATION    uint8 = 151 // 1001 0111 (0x97)
+	DOLBY_VISION       uint8 = 176 // 1011 0000 (0xB0)
 	EBP                uint8 = 233 // 1110 1001 (0xE9)
 	EC3                uint8 = 204 // 1100 1100 (0xCC)
 )
+
+// ISO_639 Audio service type
+const (
+	AUDIO_UNDEFINED		int = 0		// 0000 0000 (0x00)
+	AUDIO_DESCRIPTION	int = 3		// 0000	0011 (0x03)
+	AUDIO_PRIMARY		int = 128	// 1000 0000 (0x80)			
+)
+
 
 // PmtDescriptor represents operations currently necessary on descriptors found in the PMT
 type PmtDescriptor interface {
@@ -59,6 +70,11 @@ type PmtDescriptor interface {
 	DecodeIso639LanguageCode() string
 	DecodeIso639AudioType() byte
 	IsDolbyATMOS() bool
+	IsDolbyVision() bool
+	DecodeDolbyVisionCodec(string) string
+	IsTTMLSubtitlingDescriptor() bool
+	DecodeTTMLIso639LanguageCode() string
+	DecodeTTMLSubtitlePurpose() uint
 }
 
 type pmtDescriptor struct {
@@ -111,10 +127,15 @@ func (descriptor *pmtDescriptor) decode() string {
 		return fmt.Sprintf("Dolby Digital (%d)", descriptor.tag)
 	case SCTE_ADAPTATION:
 		return fmt.Sprintf("SCTE Adaptation (%d)", descriptor.tag)
+	case DOLBY_VISION:
+		return fmt.Sprintf("Dolby Vision (%d)", descriptor.tag)
 	case EBP:
 		return fmt.Sprintf("EBP (%d)", descriptor.tag)
 	case STREAM_IDENTIFIER:
 		return fmt.Sprintf("Stream Identifier (%d): %v", descriptor.tag, descriptor.data[0])
+	case TTML_SUBTITLING:
+		return fmt.Sprintf("TTML Subtitling (tagExt=0x%X, code=%s)",
+			descriptor.DecodeTTMLDescTagExtension(), descriptor.DecodeTTMLIso639LanguageCode())
 	}
 	return "unknown tag (" + strconv.Itoa(int(descriptor.tag)) + ")"
 }
@@ -148,6 +169,29 @@ func (descriptor *pmtDescriptor) DecodeIso639LanguageCode() string {
 
 func (descriptor *pmtDescriptor) DecodeIso639AudioType() byte {
 	return descriptor.data[3]
+}
+
+func (descriptor *pmtDescriptor) DecodeTTMLDescTagExtension() byte {
+	return descriptor.data[0]
+}
+
+func (descriptor *pmtDescriptor) IsTTMLSubtitlingDescriptor() bool {
+	return descriptor.tag == TTML_SUBTITLING
+}
+
+func (descriptor *pmtDescriptor) DecodeTTMLIso639LanguageCode() string {
+	if descriptor.tag == TTML_SUBTITLING {
+		return string(descriptor.data[1:4])
+	}
+	return ""
+}
+
+func (descriptor *pmtDescriptor) DecodeTTMLSubtitlePurpose() uint {
+	if descriptor.tag == TTML_SUBTITLING {
+		return uint(descriptor.data[4] >> 2) // First 6 bits of the 5th bytes
+	}
+
+	return 0xFF
 }
 
 // IsIFrameProfile determines from the PMT if the profile is an I-Frame only track
@@ -272,4 +316,33 @@ func (descriptor *pmtDescriptor) IsDolbyATMOS() bool {
 		}
 	}
 	return false
+}
+
+// Check if the registration data is set to `DOVI`
+// dolby-vision-bitstreams-in-mpeg-2-transport-stream-multiplex-v1.2, Section 3.1
+func (descriptor *pmtDescriptor) IsDolbyVision() bool {
+	if descriptor.tag == REGISTRATION {
+		if len(descriptor.data) >= 4 {
+			return binary.BigEndian.Uint32(descriptor.data[:4]) == 0x444F5649
+		}
+	}
+	return false
+}
+
+// Parse the profile and level of dolby vision
+// dolby-vision-bitstreams-in-mpeg-2-transport-stream-multiplex-v1.2, Section 3.3
+func (descriptor *pmtDescriptor) DecodeDolbyVisionCodec(originalCodec string) string {
+	if descriptor.tag == DOLBY_VISION && len(descriptor.data) >= 4 {
+		num := binary.BigEndian.Uint16(descriptor.data[2:4])
+		dv_profile := uint8((num & 0xFE00) >> 9)
+		dv_level := uint8((num & 0xFC) >> 3)
+
+		// Hardcode to dvhe because this is MPEG2-TS which doesn't support h265
+		// The codec strings of dvc1 vs dvhe is an mp4 specific thing
+		// dolby-vision-streams-within-the-mpeg-dash-format-v2.0 see Table 2, section 4.2.3
+		baseCodec := "dvhe"
+
+		return fmt.Sprintf("%s.%02d.%02d", baseCodec, dv_profile, dv_level)
+	}
+	return ""
 }
