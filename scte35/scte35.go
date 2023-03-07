@@ -29,8 +29,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/Comcast/gots"
-	"github.com/Comcast/gots/psi"
+	"github.com/Comcast/gots/v2"
+	"github.com/Comcast/gots/v2/psi"
 )
 
 // Descriptor tag types and identifiers - only segmentation descriptors are used for now
@@ -88,7 +88,11 @@ func (s *scte35) parseTable(data []byte) error {
 	// read over the pointer field
 	buf.Next(int(psi.PointerField(data) + 1))
 	// read in the TableHeader
-	s.tableHeader = psi.TableHeaderFromBytes(buf.Next(3))
+	var err error
+	s.tableHeader, err = psi.TableHeaderFromBytes(buf.Next(3))
+	if err != nil {
+		return err
+	}
 	if s.tableHeader.TableID == 0xfc {
 		s.protocolVersion = readByte()
 		if readByte()&0x80 != 0 {
@@ -153,6 +157,7 @@ func (s *scte35) parseTable(data []byte) error {
 				// Not interested in descriptors that are not
 				// SegmentationDescriptors
 				// Store their bytes anyways so the data is not lost.
+				s.otherDescriptorBytes = append(s.otherDescriptorBytes, descTag, descLen)
 				s.otherDescriptorBytes = append(s.otherDescriptorBytes, buf.Next(int(descLen))...)
 			} else {
 				d := &segmentationDescriptor{spliceInfo: s}
