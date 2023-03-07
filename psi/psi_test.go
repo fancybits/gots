@@ -74,3 +74,12 @@ func TestPSICreate(t *testing.T) {
 		t.Errorf("Pointer field and TableHeader do not produce expected bytes. \nExpected: %X \n     Got: %X ", target, generated)
 	}
 }
+
+func FuzzPsiSectionLength(f *testing.F) {
+	for i := 1; i < 10; i++ {
+		f.Add(make([]byte, i))
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		SectionLength(b)
+	})
+}
