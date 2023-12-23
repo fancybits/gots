@@ -29,14 +29,13 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/Comcast/gots"
+	"github.com/Comcast/gots/v2"
 )
 
 // cableLabsEbp is an encoder boundary point
 type cableLabsEbp struct {
 	baseEbp
 	FormatIdentifier uint32
-	Grouping         []uint8
 	PartitionFlags   uint8
 }
 
@@ -123,12 +122,15 @@ func readCableLabsEbp(data []byte) (ebp *cableLabsEbp, err error) {
 
 	if ebp.GroupingFlag() {
 		var group byte
-		group = data[index]
+		var groupExtFlag bool
+		groupExtFlag = data[index]&0x80 != 0
+		group = data[index] & 0x7F
 		ebp.Grouping = append(ebp.Grouping, group)
 		index += uint8(1)
 
-		for group&0x80 != 0 {
-			group = data[index]
+		for groupExtFlag {
+			groupExtFlag = data[index]&0x80 != 0
+			group = data[index] & 0x7F
 			ebp.Grouping = append(ebp.Grouping, group)
 			index += uint8(1)
 		}
@@ -183,11 +185,15 @@ func (ebp *cableLabsEbp) Data() []byte {
 
 	if ebp.GroupingFlag() {
 		for i := range ebp.Grouping {
-			ebp.Grouping[i] |= 0x80 // set flag because this is not the last ID
-			if i == len(ebp.Grouping)-1 {
-				ebp.Grouping[i] &= 0x7F // last index does not have this flag set
+			var group byte
+			if i < len(ebp.Grouping)-1 {
+				// add the ext flag for all but the last group
+				group = ebp.Grouping[i] | 0x80
+			} else {
+				// last group - no ext flag
+				group = ebp.Grouping[i]
 			}
-			binary.Write(data, ebpEncoding, ebp.Grouping[i])
+			binary.Write(data, ebpEncoding, group)
 		}
 	}
 

@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright 2016 Comcast Cable Communications Management, LLC
+# Copyright 2016 Comcast Cable Communications Management, LLC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -73,6 +73,9 @@ func TestParseCableLabsEBP(t *testing.T) {
 	if len(ebp.ReservedBytes) != 2 {
 		t.Errorf("readCableLabsEbp() has incorrect reserved, %v", ebp.ReservedBytes)
 	}
+	if ebp.StreamSyncSignal() != StreamSynchronized {
+		t.Errorf("readCableLabsEbp() has incorrect stream sync signal")
+	}
 
 	ebp, err = readCableLabsEbp([]byte{0xff, 0xf3})
 	if err == nil {
@@ -93,7 +96,7 @@ func TestCableLabsEBP(t *testing.T) {
 	ebp.SetSapFlag(true)
 	ebp.SapType = 0x02
 	ebp.SetGroupingFlag(true)
-	ebp.Grouping = []byte{0x7F, 0xFF} // wrong on purpose, will be corrected to 0xFF, 0x7F
+	ebp.Grouping = []byte{0x80, 0x1D}
 	ebp.SetTimeFlag(true)
 	ebp.SetEBPTime(time.Unix(0, 1396964696553818999).UTC())
 	ebp.PartitionFlags = 0x03
@@ -105,5 +108,51 @@ func TestCableLabsEBP(t *testing.T) {
 			expected,
 			generated,
 		)
+	}
+}
+
+func TestParseCableLabsEBPWithMultipleGroups(t *testing.T) {
+	var ebpBytes = []byte{0xdf, 0x11, 0x45, 0x42, 0x50, 0x30, 0x98, 0x80, 0xa3, 0xfe, 0x1d, 0xe6, 0xa1, 0x45, 0x18, 0xb8, 0x51, 0x00, 0x00}
+	ebp, err := readCableLabsEbp(ebpBytes)
+	if err != nil {
+		t.Logf("failed to parse CableLabs-style EBP: #{err}")
+		t.FailNow()
+	}
+	if ebp.StreamSyncSignal() != StreamSynchronized {
+		t.Errorf("Wrong stream sync signal (expected 0x1D, got #{ebp.StreamSyncSignal()})")
+	}
+	var expectedGroups = []uint8{0x00, 0x23, 0x7E, 0x1D}
+	if len(ebp.Grouping) != len(expectedGroups) {
+		t.Logf("Wrong number of group IDs (expected #{len(expectedGroups)}, got #{len(ebp.Grouping)}")
+		t.FailNow()
+	}
+	for i, gid := range expectedGroups {
+		other := ebp.Grouping[i]
+		if gid != other {
+			t.Errorf("Wrong group ID (expected #{gid}, got #{other})")
+		}
+	}
+}
+
+func TestParseCableLabsEBPWithSyncInMiddle(t *testing.T) {
+	var ebpBytes = []byte{0xdf, 0x12, 0x45, 0x42, 0x50, 0x30, 0x98, 0x80, 0xa3, 0xfe, 0x9d, 0x05, 0xe6, 0xa1, 0x45, 0x18, 0xb8, 0x51, 0x00, 0x00}
+	ebp, err := readCableLabsEbp(ebpBytes)
+	if err != nil {
+		t.Logf("failed to parse CableLabs-style EBP: #{err}")
+		t.FailNow()
+	}
+	if ebp.StreamSyncSignal() != StreamSynchronized {
+		t.Errorf("Wrong stream sync signal (expected 0x1D, got #{ebp.StreamSyncSignal()})")
+	}
+	var expectedGroups = []uint8{0x00, 0x23, 0x7E, 0x1D, 0x05}
+	if len(ebp.Grouping) != len(expectedGroups) {
+		t.Logf("Wrong number of group IDs (expected #{len(expectedGroups)}, got #{len(ebp.Grouping)}")
+		t.FailNow()
+	}
+	for i, gid := range expectedGroups {
+		other := ebp.Grouping[i]
+		if gid != other {
+			t.Errorf("Wrong group ID (expected #{gid}, got #{other})")
+		}
 	}
 }

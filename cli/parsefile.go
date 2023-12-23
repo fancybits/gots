@@ -32,11 +32,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/Comcast/gots/ebp"
-	"github.com/Comcast/gots/packet"
-	"github.com/Comcast/gots/packet/adaptationfield"
-	"github.com/Comcast/gots/psi"
-	"github.com/Comcast/gots/scte35"
+	"github.com/Comcast/gots/v2/ebp"
+	"github.com/Comcast/gots/v2/packet"
+	"github.com/Comcast/gots/v2/packet/adaptationfield"
+	"github.com/Comcast/gots/v2/psi"
+	"github.com/Comcast/gots/v2/scte35"
 )
 
 // main parses a ts file that is provided with the -f flag
@@ -92,7 +92,7 @@ func main() {
 	var pkt packet.Packet
 	var numPackets uint64
 	ebps := make(map[uint64]ebp.EncoderBoundaryPoint)
-	scte35PIDs := make(map[uint16]bool)
+	scte35PIDs := make(map[int]bool)
 	if *dumpSCTE35 {
 		for _, pmt := range pmts {
 			for _, es := range pmt.ElementaryStreams() {
@@ -147,7 +147,7 @@ func main() {
 			fmt.Printf("Packet %d contains EBP %+v\n\n", numPackets, boundaryPoint)
 		}
 		if *showPacketNumberOfPID != 0 {
-			pid := uint16(*showPacketNumberOfPID)
+			pid := *showPacketNumberOfPID
 			pktPid := packet.Pid(&pkt)
 			if pktPid == pid {
 				fmt.Printf("First Packet of PID %d contents: %x\n", pid, pkt)
@@ -158,7 +158,7 @@ func main() {
 	fmt.Println()
 }
 
-func printSCTE35(pid uint16, msg scte35.SCTE35) {
+func printSCTE35(pid int, msg scte35.SCTE35) {
 	fmt.Printf("SCTE35 Message on PID %d\n", pid)
 	printSpliceCommand(msg.CommandInfo())
 
@@ -204,7 +204,7 @@ func printSpliceInsertCommand(insert scte35.SpliceInsertCommand) {
 	}
 }
 
-func printPmt(pn uint16, pmt psi.PMT) {
+func printPmt(pn int, pmt psi.PMT) {
 	fmt.Printf("Program #%v PMT\n", pn)
 	fmt.Printf("\tPIDs %v\n", pmt.Pids())
 	fmt.Println("\tElementary Streams")
