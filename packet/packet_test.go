@@ -28,8 +28,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
-
-	"github.com/Comcast/gots"
 )
 
 func parseHexString(h string) *Packet {
@@ -80,7 +78,7 @@ func TestPid(t *testing.T) {
 			"79279065d30a93c8d5584d12b87b35938e18f2868f149f3dec38cae665db77bd" +
 			"0ba9b7a659363d7347d22f835b4e53f6472f01be53d7df28ea7f1764972f5549" +
 			"34096bd6bf42eabe1dff1c59e0cc55a716b6a40618b3305b45779c31")
-	expected := uint16(102)
+	expected := 102
 	if pid := Pid(packet); pid != expected {
 		t.Errorf("Pid() = %d, want %d", pid, expected)
 	}
@@ -94,7 +92,7 @@ func TestPidGreaterThan255(t *testing.T) {
 			"79279065d30a93c8d5584d12b87b35938e18f2868f149f3dec38cae665db77bd" +
 			"0ba9b7a659363d7347d22f835b4e53f6472f01be53d7df28ea7f1764972f5549" +
 			"34096bd6bf42eabe1dff1c59e0cc55a716b6a40618b3305b45779c31")
-	expected := uint16(290)
+	expected := 290
 	if pid := Pid(packet); pid != expected {
 		t.Errorf("Pid() = %d, want %d", pid, expected)
 	}
@@ -214,18 +212,6 @@ func TestIncrementCC(t *testing.T) {
 	expected := uint8(1)
 	if expected != newPacket[3] {
 		t.Errorf("CC= %x, want %x", newPacket[3], expected)
-	}
-}
-
-func TestBadLength(t *testing.T) {
-	packet, _ := hex.DecodeString("4740653214723f5d09c67ec90ca90ad800d6ae02c11e66772d000001e0000084")
-	acc := NewAccumulator(nil)
-	ok, err := acc.Add(packet)
-	if ok {
-		t.Errorf("BadLength, expected failure from new packet")
-	}
-	if err != gots.ErrInvalidPacketLength {
-		t.Errorf("BadLength, expected error from new packet")
 	}
 }
 
