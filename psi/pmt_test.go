@@ -932,3 +932,30 @@ func TestIsDolbyATMOS(t *testing.T) {
 		t.Errorf("Positive Dolby ATMOS Stream failed. Supposed to be a Dolby ATMOS stream.")
 	}
 }
+
+func TestRegistrationFormat(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		tag    uint8
+		data   []byte
+		format uint32
+		ok     bool
+	}{
+		{"xVTT", REGISTRATION, []byte("xVTT"), 0x78565454, true},
+		{"AC-4", REGISTRATION, []byte("AC-4"), 0x41432D34, true},
+		{"trailing bytes are ignored", REGISTRATION, []byte("AC-4\x01\x02"), 0x41432D34, true},
+		{"not a registration descriptor", LANGUAGE, []byte("eng\x00"), 0, false},
+		{"registration too short to hold an identifier", REGISTRATION, []byte("xVT"), 0, false},
+		{"empty", REGISTRATION, nil, 0, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			format, ok := NewPmtDescriptor(test.tag, test.data).RegistrationFormat()
+			if ok != test.ok {
+				t.Errorf("ok = %v, want %v", ok, test.ok)
+			}
+			if format != test.format {
+				t.Errorf("format = %#x, want %#x", format, test.format)
+			}
+		})
+	}
+}
