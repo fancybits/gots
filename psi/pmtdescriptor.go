@@ -95,6 +95,7 @@ type PmtDescriptor interface {
 	DecodeTTMLIso639LanguageCode() string
 	DecodeTTMLSubtitlePurpose() uint8
 	IsTTMLDescTagExtension() bool
+	RegistrationFormat() (uint32, bool)
 }
 
 type pmtDescriptor struct {
@@ -341,6 +342,24 @@ func (descriptor *pmtDescriptor) IsDolbyATMOS() bool {
 		}
 	}
 	return false
+}
+
+// RegistrationFormat returns the format_identifier carried by a registration
+// descriptor (ISO/IEC 13818-1 section 2.6.8), and whether this descriptor is
+// one.
+//
+// stream_type 0x06 is private data, and what rides on it is identified only
+// here: WebVTT ("xVTT"), AC-4 ("AC-4") and DVB AC-3 all share the stream type
+// and carry no other distinguishing descriptor, so a consumer that has to tell
+// continuously-sampled media from a sparse data track has nothing else to go
+// on. IsDolbyVision and IsDolbyATMOS below read the same field for their own
+// identifiers; this exposes it for the rest.
+func (descriptor *pmtDescriptor) RegistrationFormat() (uint32, bool) {
+	if descriptor.tag == REGISTRATION && len(descriptor.data) >= 4 {
+		return binary.BigEndian.Uint32(descriptor.data[:4]), true
+	}
+
+	return 0, false
 }
 
 // Check if the registration data is set to `DOVI`
